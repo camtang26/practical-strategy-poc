@@ -1,72 +1,323 @@
-### 🔄 Project Awareness & Context
-- **Always read `PLANNING.md`** at the start of a new conversation to understand the project's architecture, goals, style, and constraints.
-- **Check `TASK.md`** before starting a new task. If the task isn’t listed, add it with a brief description and today's date.
-- **Use consistent naming conventions, file structure, and architecture patterns** as described in `PLANNING.md`.
+# Practical Strategy AI Agent - Project Documentation
 
-### 🧱 Code Structure & Modularity
-- **Never create a file longer than 500 lines of code.** If a file approaches this limit, refactor by splitting it into modules or helper files.
-- **Organize code into clearly separated modules**, grouped by feature or responsibility.
-- **Use clear, consistent imports** (prefer relative imports within packages).
+## 🎯 Project Overview
 
-### 🧪 Testing & Reliability
-- **Always create Pytest unit tests for new features** (functions, classes, routes, etc).
-- **After updating any logic**, check whether existing unit tests need to be updated. If so, do it.
-- **Tests should live in a `/tests` folder** mirroring the main app structure.
-  - Include at least:
-    - 1 test for expected use
-    - 1 edge case
-    - 1 failure case
-- When testing, always activate the virtual environment in venv_linux and run python commands with 'python3'
+This is an **agentic RAG (Retrieval-Augmented Generation) knowledge graph system** built as a client demo/MVP for a business strategy book author. The system creates an AI agent that can act as if it wrote the author's comprehensive business strategy book, providing expert-level consultative responses with full context and understanding of the "Practical Strategy" methodology.
 
-### 🔌 MCP Server Usage
+### Business Purpose
+- **Client**: Business strategy book author seeking to demonstrate AI-powered knowledge retrieval
+- **Goal**: Create an AI agent that embodies the author's expertise and can provide consultative guidance
+- **Use Case**: Standalone application for strategic business consulting based on the book's content
+- **Target Audience**: Business professionals seeking strategic guidance and planning assistance
 
-#### Crawl4AI RAG MCP Server
-- **Use for external documentation**: Get docs for Pydantic AI
-- **Always check available sources first**: Use `get_available_sources` to see what's crawled.
-- **Code examples**: Use `search_code_examples` when looking for implementation patterns.
+## 🏗️ Architecture Overview
 
-#### Neon MCP Server  
-- **Database project management**: Use `create_project` to create new Neon database projects.
-- **Execute SQL**: Use `run_sql` to execute schema and data operations.
-- **Table management**: Use `get_database_tables` and `describe_table_schema` for inspection.
-- **Always specify project ID**: Pass the project ID to all database operations.
-- **Example workflow**:
-  1. `create_project` - create new database project
-  2. `run_sql` with schema SQL - set up tables
-  3. `get_database_tables` - verify schema creation
-  4. Use returned connection string for application config
+Built on the **ottomator-agents** framework, this system combines multiple AI technologies:
 
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     Client Interface                            │
+│  ┌─────────────────┐    ┌─────────────────┐                   │
+│  │  Web Interface  │    │  API Endpoints  │                   │
+│  │   (Chat UI)     │    │   (REST/SSE)    │                   │
+│  └─────────────────┘    └─────────────────┘                   │
+├─────────────────────────────────────────────────────────────────┤
+│                    Agentic AI Layer                            │
+│  ┌─────────────────┐    ┌─────────────────┐                   │
+│  │  Pydantic AI    │    │  Intelligent    │                   │
+│  │    Agent        │◄──►│  Tool Selection │                   │
+│  │  (Gemini 2.5)   │    │  & Execution    │                   │
+│  └─────────────────┘    └─────────────────┘                   │
+├─────────────────────────────────────────────────────────────────┤
+│                   Search & Retrieval Layer                     │
+│  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐  │
+│  │  Vector Search  │ │  Graph Search   │ │  Hybrid Search  │  │
+│  │ (Jina v4 2048d) │ │  (Neo4j+Graph.) │ │  (Combined)     │  │
+│  └─────────────────┘ └─────────────────┘ └─────────────────┘  │
+├─────────────────────────────────────────────────────────────────┤
+│                      Storage Layer                             │
+│  ┌─────────────────┐    ┌─────────────────┐                   │
+│  │  PostgreSQL     │    │      Neo4j      │                   │
+│  │  + pgvector     │    │  (Knowledge     │                   │
+│  │  (Neon Cloud)   │    │   Graph)        │                   │
+│  └─────────────────┘    └─────────────────┘                   │
+└─────────────────────────────────────────────────────────────────┘
+```
 
-### ✅ Task Completion
-- **Mark completed tasks in `TASK.md`** immediately after finishing them.
-- Add new sub-tasks or TODOs discovered during development to `TASK.md` under a “Discovered During Work” section.
+## 🛠️ Complete Tech Stack
 
-### 📎 Style & Conventions
-- **Use Python** as the primary language.
-- **Follow PEP8**, use type hints, and format with `black`.
-- **Use `pydantic` for data validation**.
-- Use `FastAPI` for APIs and `SQLAlchemy` or `SQLModel` for ORM if applicable.
-- Write **docstrings for every function** using the Google style:
-  ```python
-  def example():
-      """
-      Brief summary.
+### **Core AI Framework**
+- **Pydantic AI** - Main agentic framework for intelligent tool selection
+- **Ottomator-Agents** - Enhanced RAG capabilities with knowledge graph integration
+- **Gemini 2.5 Pro** - Primary language model for responses
+- **Jina Embeddings v4** - State-of-the-art multimodal embeddings (2048 dimensions, 32k context)
 
-      Args:
-          param1 (type): Description.
+### **Database & Storage**
+- **PostgreSQL + pgvector** - Vector embeddings storage (Neon Cloud)
+- **Neo4j + Graphiti** - Knowledge graph database for entity relationships
+- **Document Storage** - Processed markdown documents with metadata
 
-      Returns:
-          type: Description.
-      """
-  ```
+### **Search Capabilities**
+- **Vector Search** - Semantic similarity using Jina embeddings
+- **Graph Search** - Relationship-based retrieval via Neo4j
+- **Hybrid Search** - Combined vector + text search with intelligent weighting
+- **Temporal Knowledge** - Time-aware information tracking
 
-### 📚 Documentation & Explainability
-- **Update `README.md`** when new features are added, dependencies change, or setup steps are modified.
-- **Comment non-obvious code** and ensure everything is understandable to a mid-level developer.
-- When writing complex logic, **add an inline `# Reason:` comment** explaining the why, not just the what.
+### **API & Infrastructure**
+- **FastAPI** - Backend API with streaming responses
+- **DigitalOcean** - Cloud deployment platform
+- **Docker** - Containerization for databases
+- **CORS & Security** - Cross-origin support with proper headers
 
-### 🧠 AI Behavior Rules
-- **Never assume missing context. Ask questions if uncertain.**
-- **Never hallucinate libraries or functions** – only use known, verified Python packages.
-- **Always confirm file paths and module names** exist before referencing them in code or tests.
-- **Never delete or overwrite existing code** unless explicitly instructed to or if part of a task from `TASK.md`.
+## 🚀 Current Deployment Status
+
+### **Production Environment**
+- **Server**: DigitalOcean droplet
+- **API Endpoint**: `http://localhost:8058`
+- **Status**: ✅ Healthy and operational
+- **Database**: Connected to Neon PostgreSQL cloud
+- **Knowledge Graph**: Neo4j running locally
+
+### **System Health Check**
+```bash
+curl http://localhost:8058/health
+# Returns: {"status":"healthy","database":true,"graph_database":true,"llm_connection":true}
+```
+
+## 📚 Document Knowledge Base
+
+### **Primary Content**
+- **Practical Strategy Book** (`practical_strategy_book.md`)
+  - **Size**: 265,382 bytes of comprehensive business strategy content
+  - **Chunks**: 106 semantically processed chunks
+  - **Embeddings**: Jina v4 embeddings with 2048 dimensions
+  - **Coverage**: Complete business strategy methodology
+
+### **Content Processing**
+- **Semantic Chunking** - Intelligent text segmentation
+- **Entity Extraction** - Automated knowledge graph building
+- **Metadata Enrichment** - Source citations and context
+- **Multimodal Ready** - Support for future image content
+
+## 🔧 Configuration & Setup
+
+### **Environment Variables**
+```bash
+# Database Configuration
+DATABASE_URL=postgresql://user:pass@host/db
+POSTGRES_HOST=ep-fancy-meadow-a7kkygxb-pooler.ap-southeast-2.aws.neon.tech
+POSTGRES_PORT=5432
+POSTGRES_USER=neondb_owner
+POSTGRES_DB=neondb
+
+# Knowledge Graph
+NEO4J_URI=bolt://localhost:7688
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=agpassword123
+
+# AI Configuration
+LLM_PROVIDER=google
+LLM_CHOICE=gemini-2.5-pro
+LLM_API_KEY=your_gemini_api_key
+
+# Embeddings
+EMBEDDING_PROVIDER=jina
+EMBEDDING_MODEL=jina-embeddings-v4
+EMBEDDING_BASE_URL=https://api.jina.ai/v1
+EMBEDDING_API_KEY=your_jina_api_key
+VECTOR_DIMENSION=2048
+EMBEDDING_CHUNK_SIZE=8191
+```
+
+## 🛡️ Database Schema
+
+### **Core Tables**
+```sql
+-- Documents storage
+CREATE TABLE documents (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    title TEXT NOT NULL,
+    source TEXT NOT NULL,
+    content TEXT NOT NULL,
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Vector embeddings (Jina v4)
+CREATE TABLE chunks_jina (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    document_id UUID REFERENCES documents(id) ON DELETE CASCADE,
+    chunk_index INTEGER NOT NULL,
+    content TEXT NOT NULL,
+    embedding vector(2048),
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Chat sessions
+CREATE TABLE sessions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id TEXT,
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Message history
+CREATE TABLE messages (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    session_id UUID REFERENCES sessions(id) ON DELETE CASCADE,
+    role TEXT NOT NULL,
+    content TEXT NOT NULL,
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### **Optimized Indexes**
+```sql
+-- Vector similarity search
+CREATE INDEX chunks_jina_content_gin_idx ON chunks_jina USING gin(to_tsvector('english', content));
+CREATE INDEX chunks_jina_document_id_idx ON chunks_jina(document_id);
+
+-- Document metadata search
+CREATE INDEX idx_documents_metadata ON documents USING GIN (metadata);
+```
+
+## 🔌 API Endpoints
+
+### **Health & Status**
+- `GET /health` - System health check
+- `GET /` - Welcome message with system info
+
+### **Search Operations**
+- `POST /search/vector` - Semantic similarity search
+- `POST /search/graph` - Knowledge graph relationship search  
+- `POST /search/hybrid` - Combined vector + text search
+
+### **Document Management**
+- `GET /documents` - List all documents
+- `GET /documents/{id}` - Get specific document
+
+### **Chat Interface**
+- `POST /chat` - Single-turn conversation
+- `POST /chat/stream` - Streaming chat responses
+- `GET /sessions/{session_id}` - Get chat history
+
+### **Example API Usage**
+```bash
+# Vector search for strategic thinking concepts
+curl -X POST http://localhost:8058/search/vector \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What are the key principles of strategic thinking?", "k": 5}'
+
+# Streaming chat about business strategy
+curl -X POST http://localhost:8058/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{"message": "How do I develop a strategic plan for my organization?", "session_id": "uuid"}'
+```
+
+## 🧠 Intelligent Agent Capabilities
+
+### **Tool Selection**
+The Pydantic AI agent automatically selects the best search strategy:
+- **Vector Search**: For semantic similarity and concept matching
+- **Graph Search**: For relationship and entity-based queries
+- **Hybrid Search**: For complex queries requiring both approaches
+- **Document Retrieval**: For specific source material access
+
+### **Response Generation**
+- **Context-Aware**: Maintains conversation history and context
+- **Source Citations**: Provides specific references to book content
+- **Streaming**: Real-time response generation
+- **Multimodal Ready**: Prepared for text and image inputs
+
+## 🔄 Development Workflow
+
+### **Code Organization**
+```
+agentic-rag-knowledge-graph/
+├── agent/               # AI agent core
+│   ├── agent.py        # Pydantic AI agent
+│   ├── api.py          # FastAPI endpoints
+│   ├── tools.py        # Search tools
+│   ├── prompts.py      # System prompts
+│   └── providers.py    # LLM providers
+├── ingestion/          # Document processing
+│   ├── ingest.py       # Main ingestion
+│   ├── chunker.py      # Text chunking
+│   └── embedder.py     # Embedding generation
+├── sql/                # Database schemas
+├── documents/          # Source documents
+└── tests/              # Test suite
+```
+
+### **Development Guidelines**
+- **Modularity**: Keep files under 500 lines, split into logical modules
+- **Testing**: Comprehensive pytest suite with unit tests
+- **Documentation**: Google-style docstrings for all functions
+- **Type Hints**: Full type annotations using Pydantic models
+- **Error Handling**: Graceful failure with proper logging
+
+## 🚨 Troubleshooting & Maintenance
+
+### **Common Issues**
+1. **Neo4j Connection**: Ensure Docker container is running
+2. **Embedding API**: Check Jina API key and rate limits
+3. **Database Performance**: Monitor pgvector index efficiency
+4. **Memory Usage**: Watch for large document processing
+
+### **Monitoring**
+```bash
+# Check API health
+curl http://localhost:8058/health
+
+# Monitor logs
+tail -f api.log
+
+# Database connections
+docker ps | grep postgres
+docker ps | grep neo4j
+```
+
+### **Performance Optimization**
+- **Vector Indexes**: Use HNSW for large datasets (current: ivfflat)
+- **Chunking Strategy**: Optimize chunk size for specific domains
+- **Caching**: Implement Redis for frequent queries
+- **Connection Pooling**: Monitor database connection usage
+
+## 📈 Future Enhancements
+
+### **Planned Features**
+- **Multimodal Support**: Image embeddings with Jina v4
+- **Advanced Analytics**: Query pattern analysis
+- **User Management**: Authentication and user sessions
+- **API Rate Limiting**: Request throttling and quotas
+- **Webhook Integration**: Real-time notifications
+
+### **Scalability Considerations**
+- **Horizontal Scaling**: Multiple API instances
+- **Database Sharding**: Distribute vector storage
+- **CDN Integration**: Cache static responses
+- **Load Balancing**: Multi-region deployment
+
+## 🎯 Success Metrics
+
+### **Performance Targets**
+- **Response Time**: < 2 seconds for search queries
+- **Accuracy**: High relevance scores (>0.7 similarity)
+- **Availability**: 99.9% uptime
+- **Scalability**: Support for 1000+ concurrent users
+
+### **Business Value**
+- **Expert Knowledge Access**: 24/7 strategic consulting
+- **Consistent Responses**: Standardized methodology application
+- **Scalable Expertise**: Serve multiple clients simultaneously
+- **Cost Efficiency**: Reduce human consultant dependencies
+
+---
+
+## 📞 Support & Contact
+
+For technical issues, deployment questions, or enhancement requests related to this Practical Strategy AI Agent system, refer to the project documentation and logs for debugging information.
+
+**Remember**: This system represents the cutting edge of agentic RAG technology, combining semantic search, knowledge graphs, and intelligent agent capabilities to deliver expert-level business strategy consulting at scale.
