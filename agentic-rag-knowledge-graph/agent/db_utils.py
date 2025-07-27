@@ -15,6 +15,7 @@ import asyncpg
 from asyncpg.pool import Pool
 from dotenv import load_dotenv
 
+from .providers import get_embedding_provider
 # Load environment variables
 load_dotenv()
 
@@ -384,10 +385,13 @@ async def vector_search(
         # Convert embedding to PostgreSQL vector string format
         # PostgreSQL vector format: '[1.0,2.0,3.0]' (no spaces after commas)
         embedding_str = '[' + ','.join(map(str, embedding)) + ']'
+        provider = get_embedding_provider()
+        provider = get_embedding_provider()
         
         results = await conn.fetch(
-            "SELECT * FROM match_chunks($1::vector, $2)",
+            "SELECT * FROM match_chunks_unified($1::vector, $2, $3)",
             embedding_str,
+            provider,
             limit
         )
         
@@ -427,11 +431,13 @@ async def hybrid_search(
         # Convert embedding to PostgreSQL vector string format
         # PostgreSQL vector format: '[1.0,2.0,3.0]' (no spaces after commas)
         embedding_str = '[' + ','.join(map(str, embedding)) + ']'
+        provider = get_embedding_provider()
         
         results = await conn.fetch(
-            "SELECT * FROM hybrid_search($1::vector, $2, $3, $4)",
+            "SELECT * FROM hybrid_search_unified($1::vector, $2, $3, $4, $5)",
             embedding_str,
             query_text,
+            provider,
             limit,
             text_weight
         )

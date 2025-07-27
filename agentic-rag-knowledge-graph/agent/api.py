@@ -286,7 +286,8 @@ async def execute_agent(
     message: str,
     session_id: str,
     user_id: Optional[str] = None,
-    save_conversation: bool = True
+    save_conversation: bool = True,
+    search_type: Optional[str] = None
 ) -> tuple[str, List[ToolCall]]:
     """
     Execute the agent with a message.
@@ -303,6 +304,7 @@ async def execute_agent(
     try:
         # Create dependencies
         deps = AgentDependencies(
+            search_type=search_type,
             session_id=session_id,
             user_id=user_id
         )
@@ -396,7 +398,8 @@ async def chat(request: ChatRequest):
         response, tools_used = await execute_agent(
             message=request.message,
             session_id=session_id,
-            user_id=request.user_id
+            user_id=request.user_id,
+            search_type=getattr(request, 'search_type', None)
         )
         
         return ChatResponse(
@@ -425,6 +428,7 @@ async def chat_stream(request: ChatRequest):
                 
                 # Create dependencies
                 deps = AgentDependencies(
+            search_type=getattr(request, "search_type", None),
                     session_id=session_id,
                     user_id=request.user_id
                 )

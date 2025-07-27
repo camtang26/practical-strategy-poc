@@ -321,3 +321,92 @@ docker ps | grep neo4j
 For technical issues, deployment questions, or enhancement requests related to this Practical Strategy AI Agent system, refer to the project documentation and logs for debugging information.
 
 **Remember**: This system represents the cutting edge of agentic RAG technology, combining semantic search, knowledge graphs, and intelligent agent capabilities to deliver expert-level business strategy consulting at scale.
+
+---
+
+## 🧠 Project Memory Agents
+
+This project uses specialized memory agents to preserve context and prevent re-discovery of solutions. Located in `.claude/agents/`:
+
+### Available Memory Agents
+
+**database-memory**
+- Purpose: PostgreSQL and Neo4j operations, memory management, migration patterns
+- Consult when: Working with databases, fixing memory issues, creating indexes
+- Key knowledge: Neo4j memory limits (1.5GB), pgvector dimension constraints, migration scripts
+
+**deployment-memory**
+- Purpose: Digital Ocean SSH patterns, Docker management, API backgrounding
+- Consult when: Deploying services, backgrounding processes, managing containers
+- Key knowledge: bash -c wrapper for nohup, memory constraints (3.8GB total), process management
+
+**embeddings-memory**
+- Purpose: Jina API quirks, dimension handling, multi-provider support
+- Consult when: Working with embeddings, fixing API errors, switching providers
+- Key knowledge: Jina rejects encoding_format parameter, custom HTTP client required, 2048 dimensions
+
+**llm-memory**
+- Purpose: LLM provider configurations, tool calling issues, Gemini to Qwen3 transition
+- Consult when: Configuring LLMs, debugging tool selection, switching providers
+- Key knowledge: Gemini ignores search_type constraints, Qwen3 superior for tool calling
+
+**search-memory**
+- Purpose: Vector/graph/hybrid search implementations, SQL functions, performance
+- Consult when: Optimizing search, writing SQL functions, debugging empty results
+- Key knowledge: Provider filtering required, RRF scoring, ~2.6s hybrid search time
+
+**graphiti-memory**
+- Purpose: Knowledge graph building, entity extraction, batch processing
+- Consult when: Building graphs, extracting entities, managing long processes
+- Key knowledge: ~50s per chunk processing, 4-hour total time, Gemini configuration
+
+### Usage Protocol
+
+1. **BEFORE** working on any domain below, consult its agent:
+   ```
+   Task("Consult database-memory agent for Neo4j configuration")
+   ```
+
+2. **AFTER** discovering new solutions, update the agent:
+   ```
+   Task("Update embeddings-memory with new Jina API discovery")
+   ```
+
+3. **When stuck**, check if a memory agent has the solution:
+   ```
+   Task("Check all memory agents for similar issues")
+   ```
+
+### Why This Matters
+
+These agents prevent:
+- Re-solving the same problems (e.g., Jina API quirks)
+- Forgetting working configurations (e.g., Neo4j memory settings)
+- Breaking integrations you forgot about (e.g., dimension mismatches)
+- Wasting time on known issues (e.g., Gemini tool calling)
+
+### Critical Known Issues
+
+1. **Server Memory**: Only 3.8GB total RAM - carefully manage service memory
+2. **Jina API**: MUST use custom HTTP client, not OpenAI client
+3. **Gemini Tool Calling**: Doesn't respect constraints - switching to Qwen3
+4. **Neo4j Container**: Limited to 1.5GB memory or crashes
+5. **Background Processes**: Must use `bash -c 'nohup ... &'` pattern
+
+### Quick Command Reference
+
+```bash
+# Start API (use this exact pattern!)
+cd /opt/practical-strategy-poc/agentic-rag-knowledge-graph && bash -c 'nohup python3 -m agent.api > api.log 2>&1 &'
+
+# Check services
+docker ps
+ps aux | grep python
+curl http://localhost:8000/health
+
+# Monitor memory
+free -h
+docker stats --no-stream
+```
+
+Remember: These memory agents are PROJECT-SPECIFIC - they know THIS codebase and its unique challenges!

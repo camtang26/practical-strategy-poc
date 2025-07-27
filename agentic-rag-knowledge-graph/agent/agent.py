@@ -1,11 +1,11 @@
 """
-Main Pydantic AI agent for agentic RAG with knowledge graph.
+Agentic RAG with flexible LLM provider support.
 """
 
 import os
-import logging
-from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
+from typing import List, Dict, Any, Optional
+import logging
 
 from pydantic_ai import Agent, RunContext
 from dotenv import load_dotenv
@@ -32,6 +32,7 @@ from .tools import (
 # Load environment variables
 load_dotenv()
 
+# Set up logging
 logger = logging.getLogger(__name__)
 
 
@@ -41,6 +42,7 @@ class AgentDependencies:
     session_id: str
     user_id: Optional[str] = None
     search_preferences: Dict[str, Any] = None
+    search_type: Optional[str] = None  # Add search_type field
     
     def __post_init__(self):
         if self.search_preferences is None:
@@ -68,36 +70,23 @@ async def vector_search(
 ) -> List[Dict[str, Any]]:
     """
     Search for relevant information using semantic similarity.
-    
-    This tool performs vector similarity search across document chunks
-    to find semantically related content. Returns the most relevant results
-    regardless of similarity score.
+    USE ONLY when search_type is 'vector'.
     
     Args:
-        query: Search query to find similar content
-        limit: Maximum number of results to return (1-50)
+        ctx: Agent context
+        query: Search query
+        limit: Maximum number of results
     
     Returns:
-        List of matching chunks ordered by similarity (best first)
+        List of search results
     """
-    input_data = VectorSearchInput(
-        query=query,
-        limit=limit
-    )
+    # Enforce search_type constraint
+    if ctx.deps.search_type and ctx.deps.search_type != "vector":
+        logger.warning(f"vector_search called but search_type is {ctx.deps.search_type}")
+        return []
     
-    results = await vector_search_tool(input_data)
-    
-    # Convert results to dict for agent
-    return [
-        {
-            "content": r.content,
-            "score": r.score,
-            "document_title": r.document_title,
-            "document_source": r.document_source,
-            "chunk_id": r.chunk_id
-        }
-        for r in results
-    ]
+    input_data = VectorSearchInput(query=query, limit=limit)
+    return await vector_search_tool(input_data)
 
 
 @rag_agent.tool
@@ -107,32 +96,22 @@ async def graph_search(
 ) -> List[Dict[str, Any]]:
     """
     Search the knowledge graph for facts and relationships.
-    
-    This tool queries the knowledge graph to find specific facts, relationships 
-    between entities, and temporal information. Best for finding specific facts,
-    relationships between companies/people/technologies, and time-based information.
+    USE ONLY when search_type is 'graph'.
     
     Args:
-        query: Search query to find facts and relationships
+        ctx: Agent context
+        query: Search query
     
     Returns:
-        List of facts with associated episodes and temporal data
+        List of graph search results
     """
+    # Enforce search_type constraint
+    if ctx.deps.search_type and ctx.deps.search_type != "graph":
+        logger.warning(f"graph_search called but search_type is {ctx.deps.search_type}")
+        return []
+        
     input_data = GraphSearchInput(query=query)
-    
-    results = await graph_search_tool(input_data)
-    
-    # Convert results to dict for agent
-    return [
-        {
-            "fact": r.fact,
-            "uuid": r.uuid,
-            "valid_at": r.valid_at,
-            "invalid_at": r.invalid_at,
-            "source_node_uuid": r.source_node_uuid
-        }
-        for r in results
-    ]
+    return await graph_search_tool(input_data)
 
 
 @rag_agent.tool
@@ -143,39 +122,29 @@ async def hybrid_search(
     text_weight: float = 0.3
 ) -> List[Dict[str, Any]]:
     """
-    Perform both vector and keyword search for comprehensive results.
-    
-    This tool combines semantic similarity search with keyword matching
-    for the best coverage. It ranks results using both vector similarity
-    and text matching scores. Best for combining semantic and exact matching.
+    Perform hybrid search combining vector and keyword search.
+    USE ONLY when search_type is 'hybrid' or None.
     
     Args:
-        query: Search query for hybrid search
-        limit: Maximum number of results to return (1-50)
-        text_weight: Weight for text similarity vs vector similarity (0.0-1.0)
+        ctx: Agent context
+        query: Search query
+        limit: Maximum number of results
+        text_weight: Weight for text search (0-1)
     
     Returns:
-        List of chunks ranked by combined relevance score
+        List of search results
     """
+    # Log search_type mismatch but allow search to proceed
+    if ctx.deps.search_type and ctx.deps.search_type not in ["hybrid", None]:
+        logger.warning(f"hybrid_search called but search_type is {ctx.deps.search_type}")
+        # Continue with search anyway to avoid empty results
+        
     input_data = HybridSearchInput(
         query=query,
         limit=limit,
         text_weight=text_weight
     )
-    
-    results = await hybrid_search_tool(input_data)
-    
-    # Convert results to dict for agent
-    return [
-        {
-            "content": r.content,
-            "score": r.score,
-            "document_title": r.document_title,
-            "document_source": r.document_source,
-            "chunk_id": r.chunk_id
-        }
-        for r in results
-    ]
+    return await hybrid_search_tool(input_data)
 
 
 @rag_agent.tool
@@ -184,127 +153,71 @@ async def get_document(
     document_id: str
 ) -> Optional[Dict[str, Any]]:
     """
-    Retrieve the complete content of a specific document.
-    
-    This tool fetches the full document content along with all its chunks
-    and metadata. Best for getting comprehensive information from a specific
-    source when you need the complete context.
+    Get a specific document by ID.
     
     Args:
-        document_id: UUID of the document to retrieve
+        ctx: Agent context
+        document_id: Document ID
     
     Returns:
-        Complete document data with content and metadata, or None if not found
+        Document details or None
     """
     input_data = DocumentInput(document_id=document_id)
-    
-    document = await get_document_tool(input_data)
-    
-    if document:
-        # Format for agent consumption
-        return {
-            "id": document["id"],
-            "title": document["title"],
-            "source": document["source"],
-            "content": document["content"],
-            "chunk_count": len(document.get("chunks", [])),
-            "created_at": document["created_at"]
-        }
-    
-    return None
+    return await get_document_tool(input_data)
 
 
 @rag_agent.tool
 async def list_documents(
-    ctx: RunContext[AgentDependencies],
-    limit: int = 20,
-    offset: int = 0
+    ctx: RunContext[AgentDependencies]
 ) -> List[Dict[str, Any]]:
     """
-    List available documents with their metadata.
-    
-    This tool provides an overview of all documents in the knowledge base,
-    including titles, sources, and chunk counts. Best for understanding
-    what information sources are available.
+    List all available documents.
     
     Args:
-        limit: Maximum number of documents to return (1-100)
-        offset: Number of documents to skip for pagination
+        ctx: Agent context
     
     Returns:
-        List of documents with metadata and chunk counts
+        List of documents
     """
-    input_data = DocumentListInput(limit=limit, offset=offset)
-    
-    documents = await list_documents_tool(input_data)
-    
-    # Convert to dict for agent
-    return [
-        {
-            "id": d.id,
-            "title": d.title,
-            "source": d.source,
-            "chunk_count": d.chunk_count,
-            "created_at": d.created_at.isoformat()
-        }
-        for d in documents
-    ]
+    input_data = DocumentListInput()
+    return await list_documents_tool(input_data)
 
 
 @rag_agent.tool
 async def get_entity_relationships(
     ctx: RunContext[AgentDependencies],
-    entity_name: str,
+    entity: str,
     depth: int = 2
 ) -> Dict[str, Any]:
     """
-    Get all relationships for a specific entity in the knowledge graph.
-    
-    This tool explores the knowledge graph to find how a specific entity
-    (company, person, technology) relates to other entities. Best for
-    understanding how companies or technologies relate to each other.
+    Get relationships for an entity from the knowledge graph.
     
     Args:
-        entity_name: Name of the entity to explore (e.g., "Google", "OpenAI")
-        depth: Maximum traversal depth for relationships (1-5)
+        ctx: Agent context
+        entity: Entity name
+        depth: Relationship depth
     
     Returns:
-        Entity relationships and connected entities with relationship types
+        Entity relationships
     """
-    input_data = EntityRelationshipInput(
-        entity_name=entity_name,
-        depth=depth
-    )
-    
+    input_data = EntityRelationshipInput(entity_name=entity, depth=depth)
     return await get_entity_relationships_tool(input_data)
 
 
 @rag_agent.tool
 async def get_entity_timeline(
     ctx: RunContext[AgentDependencies],
-    entity_name: str,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None
+    entity: str
 ) -> List[Dict[str, Any]]:
     """
-    Get the timeline of facts for a specific entity.
-    
-    This tool retrieves chronological information about an entity,
-    showing how information has evolved over time. Best for understanding
-    how information about an entity has developed or changed.
+    Get timeline of facts for an entity.
     
     Args:
-        entity_name: Name of the entity (e.g., "Microsoft", "AI")
-        start_date: Start date in ISO format (YYYY-MM-DD), optional
-        end_date: End date in ISO format (YYYY-MM-DD), optional
+        ctx: Agent context
+        entity: Entity name
     
     Returns:
-        Chronological list of facts about the entity with timestamps
+        Timeline of facts
     """
-    input_data = EntityTimelineInput(
-        entity_name=entity_name,
-        start_date=start_date,
-        end_date=end_date
-    )
-    
+    input_data = EntityTimelineInput(entity_name=entity)
     return await get_entity_timeline_tool(input_data)

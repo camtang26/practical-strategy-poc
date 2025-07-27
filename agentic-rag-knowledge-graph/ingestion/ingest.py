@@ -16,7 +16,7 @@ import asyncpg
 from dotenv import load_dotenv
 
 from .chunker import ChunkingConfig, create_chunker, DocumentChunk
-from .embedder import create_embedder
+from .embedder_jina import create_embedder
 from .graph_builder import create_graph_builder
 
 # Import agent utilities

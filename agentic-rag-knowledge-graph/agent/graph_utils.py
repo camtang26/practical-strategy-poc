@@ -14,7 +14,9 @@ from graphiti_core import Graphiti
 from graphiti_core.utils.maintenance.graph_data_operations import clear_data
 from graphiti_core.llm_client.config import LLMConfig
 from graphiti_core.llm_client.openai_client import OpenAIClient
+from graphiti_core.llm_client.gemini_client import GeminiClient
 from graphiti_core.embedder.openai import OpenAIEmbedder, OpenAIEmbedderConfig
+from graphiti_core.embedder.gemini import GeminiEmbedder, GeminiEmbedderConfig
 from graphiti_core.cross_encoder.openai_reranker_client import OpenAIRerankerClient
 from dotenv import load_dotenv
 
@@ -49,6 +51,9 @@ class GraphitiClient:
         if not self.neo4j_password:
             raise ValueError("NEO4J_PASSWORD environment variable not set")
         
+        # Provider configuration
+        self.llm_provider = os.getenv("LLM_PROVIDER", "openai").lower()
+        
         # LLM configuration
         self.llm_base_url = os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")
         self.llm_api_key = os.getenv("LLM_API_KEY")
@@ -58,13 +63,16 @@ class GraphitiClient:
             raise ValueError("LLM_API_KEY environment variable not set")
         
         # Embedding configuration
-        self.embedding_base_url = os.getenv("EMBEDDING_BASE_URL", "https://api.openai.com/v1")
-        self.embedding_api_key = os.getenv("EMBEDDING_API_KEY")
-        self.embedding_model = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
-        self.embedding_dimensions = int(os.getenv("VECTOR_DIMENSION", "1536"))
+        # For Graphiti, we ALWAYS use Gemini embeddings with 768 dimensions
+        # This is independent of the LLM provider choice
+        self.embedding_provider = "gemini"  # Always use Gemini for graph embeddings
+        self.embedding_api_key = os.getenv("GEMINI_API_KEY") or os.getenv("LLM_API_KEY")
+        self.embedding_model = "embedding-001"  # Gemini embedding model
+        self.embedding_dimensions = int(os.getenv("GRAPHITI_EMBEDDING_DIM", "768"))
+        self.embedding_base_url = "https://generativelanguage.googleapis.com"  # Gemini base URL
         
         if not self.embedding_api_key:
-            raise ValueError("EMBEDDING_API_KEY environment variable not set")
+            raise ValueError("Embedding API key not set")
         
         self.graphiti: Optional[Graphiti] = None
         self._initialized = False
@@ -83,27 +91,55 @@ class GraphitiClient:
                 base_url=self.llm_base_url
             )
             
-            # Create OpenAI LLM client
-            llm_client = OpenAIClient(config=llm_config)
+            # Create LLM client based on provider
+            if self.llm_provider in ["gemini", "google"]:
+                llm_client = GeminiClient(config=llm_config)
+                logger.info(f"Using Gemini LLM client with model: {self.llm_choice}")
+            else:
+                llm_client = OpenAIClient(config=llm_config)
+                logger.info(f"Using OpenAI LLM client with model: {self.llm_choice}")
             
-            # Create OpenAI embedder
-            embedder = OpenAIEmbedder(
-                config=OpenAIEmbedderConfig(
-                    api_key=self.embedding_api_key,
-                    embedding_model=self.embedding_model,
-                    embedding_dim=self.embedding_dimensions,
-                    base_url=self.embedding_base_url
+            # Create embedder based on provider
+            if self.embedding_provider == "gemini":
+                embedder = GeminiEmbedder(
+                    config=GeminiEmbedderConfig(
+                        api_key=self.embedding_api_key,
+                        embedding_model=self.embedding_model,
+                        embedding_dim=self.embedding_dimensions
+                    )
                 )
-            )
+                logger.info(f"Using Gemini embedder with model: {self.embedding_model}, dimensions: {self.embedding_dimensions}")
+            else:
+                embedder = OpenAIEmbedder(
+                    config=OpenAIEmbedderConfig(
+                        api_key=self.embedding_api_key,
+                        embedding_model=self.embedding_model,
+                        embedding_dim=self.embedding_dimensions,
+                        base_url=self.embedding_base_url
+                    )
+                )
+                logger.info(f"Using OpenAI embedder with model: {self.embedding_model}, dimensions: {self.embedding_dimensions}")
             
             # Initialize Graphiti with custom clients
+            # Note: We always use OpenAI reranker as there's no Gemini reranker available
             self.graphiti = Graphiti(
                 self.neo4j_uri,
                 self.neo4j_user,
                 self.neo4j_password,
                 llm_client=llm_client,
                 embedder=embedder,
-                cross_encoder=OpenAIRerankerClient(client=llm_client, config=llm_config)
+                cross_encoder=OpenAIRerankerClient(
+                    client=OpenAIClient(config=LLMConfig(
+                        api_key=os.getenv("OPENAI_API_KEY", self.llm_api_key),
+                        model="gpt-3.5-turbo",
+                        base_url="https://api.openai.com/v1"
+                    )),
+                    config=LLMConfig(
+                        api_key=os.getenv("OPENAI_API_KEY", self.llm_api_key),
+                        model="gpt-3.5-turbo",
+                        base_url="https://api.openai.com/v1"
+                    )
+                )
             )
             
             # Build indices and constraints
@@ -321,7 +357,7 @@ class GraphitiClient:
             if self.graphiti:
                 await self.graphiti.close()
             
-            # Create OpenAI-compatible clients for reinitialization
+            # Recreate clients with provider switching for reinitialization
             llm_config = LLMConfig(
                 api_key=self.llm_api_key,
                 model=self.llm_choice,
@@ -329,16 +365,30 @@ class GraphitiClient:
                 base_url=self.llm_base_url
             )
             
-            llm_client = OpenAIClient(config=llm_config)
+            # Create LLM client based on provider
+            if self.llm_provider in ["gemini", "google"]:
+                llm_client = GeminiClient(config=llm_config)
+            else:
+                llm_client = OpenAIClient(config=llm_config)
             
-            embedder = OpenAIEmbedder(
-                config=OpenAIEmbedderConfig(
-                    api_key=self.embedding_api_key,
-                    embedding_model=self.embedding_model,
-                    embedding_dim=self.embedding_dimensions,
-                    base_url=self.embedding_base_url
+            # Create embedder based on provider
+            if self.embedding_provider == "gemini":
+                embedder = GeminiEmbedder(
+                    config=GeminiEmbedderConfig(
+                        api_key=self.embedding_api_key,
+                        embedding_model=self.embedding_model,
+                        embedding_dim=self.embedding_dimensions
+                    )
                 )
-            )
+            else:
+                embedder = OpenAIEmbedder(
+                    config=OpenAIEmbedderConfig(
+                        api_key=self.embedding_api_key,
+                        embedding_model=self.embedding_model,
+                        embedding_dim=self.embedding_dimensions,
+                        base_url=self.embedding_base_url
+                    )
+                )
             
             self.graphiti = Graphiti(
                 self.neo4j_uri,
@@ -346,7 +396,18 @@ class GraphitiClient:
                 self.neo4j_password,
                 llm_client=llm_client,
                 embedder=embedder,
-                cross_encoder=OpenAIRerankerClient(client=llm_client, config=llm_config)
+                cross_encoder=OpenAIRerankerClient(
+                    client=OpenAIClient(config=LLMConfig(
+                        api_key=os.getenv("OPENAI_API_KEY", self.llm_api_key),
+                        model="gpt-3.5-turbo",
+                        base_url="https://api.openai.com/v1"
+                    )),
+                    config=LLMConfig(
+                        api_key=os.getenv("OPENAI_API_KEY", self.llm_api_key),
+                        model="gpt-3.5-turbo",
+                        base_url="https://api.openai.com/v1"
+                    )
+                )
             )
             await self.graphiti.build_indices_and_constraints()
             

@@ -25,6 +25,7 @@ from .graph_utils import (
 )
 from .models import ChunkResult, GraphSearchResult, DocumentMetadata
 from .providers import get_embedding_client, get_embedding_model
+from .providers_extended import generate_embedding_unified
 
 # Load environment variables
 load_dotenv()
@@ -38,7 +39,7 @@ EMBEDDING_MODEL = get_embedding_model()
 
 async def generate_embedding(text: str) -> List[float]:
     """
-    Generate embedding for text using OpenAI.
+    Generate embedding for text using configured provider.
     
     Args:
         text: Text to embed
@@ -47,11 +48,7 @@ async def generate_embedding(text: str) -> List[float]:
         Embedding vector
     """
     try:
-        response = await embedding_client.embeddings.create(
-            model=EMBEDDING_MODEL,
-            input=text
-        )
-        return response.data[0].embedding
+        return await generate_embedding_unified(text)
     except Exception as e:
         logger.error(f"Failed to generate embedding: {e}")
         raise
