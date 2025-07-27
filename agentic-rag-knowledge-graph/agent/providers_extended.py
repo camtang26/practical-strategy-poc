@@ -10,7 +10,7 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.append(str(Path(__file__).parent.parent))
 
-from ingestion.experimental_embedder_jina_v2 import OptimizedJinaEmbeddingGenerator
+from ingestion.embedder_jina_v2_prod import OptimizedJinaEmbeddingGenerator
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -88,6 +88,6 @@ async def generate_embedding_unified(text: str) -> List[float]:
 async def cleanup_embedder():
     """Clean up the embedder resources."""
     global _embedder_instance
-    if _embedder_instance and hasattr(_embedder_instance, '_client') and _embedder_instance._client:
-        await _embedder_instance._client.aclose()
+    if _embedder_instance:
+        await _embedder_instance.close()
         _embedder_instance = None

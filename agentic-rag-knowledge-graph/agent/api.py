@@ -29,6 +29,7 @@ from .db_utils import (
     test_connection
 )
 from .graph_utils import initialize_graph, close_graph, test_graph_connection
+from .providers_extended import cleanup_embedder
 from .models import (
     ChatRequest,
     ChatResponse,
@@ -108,6 +109,7 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down agentic RAG API...")
     
     try:
+        await cleanup_embedder()
         await close_database()
         await close_graph()
         logger.info("Connections closed")
