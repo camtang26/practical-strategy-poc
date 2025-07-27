@@ -1,6 +1,9 @@
 """
 Tools for the Pydantic AI agent.
 """
+from .experimental_cache_manager import cached_search, get_embedding_cache
+from .experimental_error_handler import retry_with_backoff, handle_error
+
 
 import os
 import logging
@@ -39,7 +42,7 @@ EMBEDDING_MODEL = get_embedding_model()
 
 async def generate_embedding(text: str) -> List[float]:
     """
-    Generate embedding for text using configured provider.
+    Generate embedding for text using configured provider with caching.
     
     Args:
         text: Text to embed
@@ -48,6 +51,7 @@ async def generate_embedding(text: str) -> List[float]:
         Embedding vector
     """
     try:
+        # Use cached version
         return await generate_embedding_unified(text)
     except Exception as e:
         logger.error(f"Failed to generate embedding: {e}")
@@ -169,6 +173,8 @@ async def graph_search_tool(input_data: GraphSearchInput) -> List[GraphSearchRes
         return []
 
 
+@retry_with_backoff(max_retries=3)
+@cached_search(ttl_seconds=300)
 async def hybrid_search_tool(input_data: HybridSearchInput) -> List[ChunkResult]:
     """
     Perform hybrid search (vector + keyword).

@@ -414,17 +414,22 @@ async def chat(request: ChatRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# Fast path for simple queries
+from .fast_chat import is_simple_query, fast_chat_stream
 
 @app.post("/chat/stream")
+# Fast path for simple queries
+from .fast_chat import is_simple_query, fast_chat_stream
 
 async def chat_stream(request: ChatRequest):
+# Fast path for simple queries
+from .fast_chat import is_simple_query, fast_chat_stream
 
     """Streaming chat endpoint using Server-Sent Events."""
     try:
         # Get or create session
         session_id = await get_or_create_session(request)
         
-        # Check if this is a simple query that can use fast path
         async def generate_stream():
             """Generate streaming response using agent.iter() pattern."""
             try:

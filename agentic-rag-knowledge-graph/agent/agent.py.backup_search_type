@@ -70,7 +70,7 @@ async def vector_search(
 ) -> List[Dict[str, Any]]:
     """
     Search for relevant information using semantic similarity.
-    Best for semantic similarity searches.
+    USE ONLY when search_type is 'vector'.
     
     Args:
         ctx: Agent context
@@ -80,6 +80,10 @@ async def vector_search(
     Returns:
         List of search results
     """
+    # Enforce search_type constraint
+    if ctx.deps.search_type and ctx.deps.search_type != "vector":
+        logger.warning(f"vector_search called but search_type is {ctx.deps.search_type}")
+        return []
     
     input_data = VectorSearchInput(query=query, limit=limit)
     return await vector_search_tool(input_data)
@@ -92,7 +96,7 @@ async def graph_search(
 ) -> List[Dict[str, Any]]:
     """
     Search the knowledge graph for facts and relationships.
-    Best for exploring relationships and connections.
+    USE ONLY when search_type is 'graph'.
     
     Args:
         ctx: Agent context
@@ -101,6 +105,10 @@ async def graph_search(
     Returns:
         List of graph search results
     """
+    # Enforce search_type constraint
+    if ctx.deps.search_type and ctx.deps.search_type != "graph":
+        logger.warning(f"graph_search called but search_type is {ctx.deps.search_type}")
+        return []
         
     input_data = GraphSearchInput(query=query)
     return await graph_search_tool(input_data)
@@ -115,7 +123,7 @@ async def hybrid_search(
 ) -> List[Dict[str, Any]]:
     """
     Perform hybrid search combining vector and keyword search.
-    Best for comprehensive searches combining both approaches
+    USE ONLY when search_type is 'hybrid' or None.
     
     Args:
         ctx: Agent context
@@ -126,6 +134,10 @@ async def hybrid_search(
     Returns:
         List of search results
     """
+    # Enforce search_type constraint
+    if ctx.deps.search_type and ctx.deps.search_type not in ["hybrid", None]:
+        logger.warning(f"hybrid_search called but search_type is {ctx.deps.search_type}")
+        return []
         
     input_data = HybridSearchInput(
         query=query,

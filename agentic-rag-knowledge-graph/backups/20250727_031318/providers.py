@@ -8,7 +8,6 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.models.gemini import GeminiModel
 import openai
-import google.generativeai as genai
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -23,34 +22,27 @@ def get_llm_model(model_choice: Optional[str] = None) -> Union[OpenAIModel, Gemi
         model_choice: Optional override for model choice
     
     Returns:
-        Configured LLM model (OpenAI or Gemini)
+        Configured model (OpenAI or Gemini)
     """
-    provider_type = os.getenv('LLM_PROVIDER', 'openai')
+    llm_provider = os.getenv('LLM_PROVIDER', 'openai').lower()
     llm_choice = model_choice or os.getenv('LLM_CHOICE', 'gpt-4-turbo-preview')
-    api_key = os.getenv('LLM_API_KEY', 'ollama')
     
-    if provider_type == 'google':
-        # Configure Google Gemini
-        genai.configure(api_key=api_key)
+    if llm_provider in ['google', 'gemini']:
+        # Use Gemini model for Google provider
+        api_key = os.getenv('LLM_API_KEY', os.getenv('GOOGLE_API_KEY', ''))
+        if not api_key:
+            raise ValueError("Google/Gemini API key not found in LLM_API_KEY or GOOGLE_API_KEY")
+        
         # Set the environment variable that pydantic-ai expects
         os.environ['GEMINI_API_KEY'] = api_key
+        
+        # GeminiModel doesn't use providers - just pass the model name
         return GeminiModel(llm_choice)
-    elif provider_type == 'openrouter':
-        # Configure OpenRouter (uses OpenAI-compatible API)
-        api_key = os.getenv('OPENROUTER_API_KEY')
-        if not api_key:
-            raise ValueError("OPENROUTER_API_KEY not found in environment variables")
-        base_url = 'https://openrouter.ai/api/v1'
-        provider = OpenAIProvider(base_url=base_url, api_key=api_key)
-        return OpenAIModel(llm_choice, provider=provider)
-    elif provider_type == 'qwen':
-        # Configure Qwen (uses OpenAI-compatible API)
-        base_url = os.getenv('LLM_BASE_URL', 'https://api.qwen.ai/v1')
-        provider = OpenAIProvider(base_url=base_url, api_key=api_key)
-        return OpenAIModel(llm_choice, provider=provider)
     else:
-        # Default to OpenAI-compatible
+        # Use OpenAI-compatible model for other providers
         base_url = os.getenv('LLM_BASE_URL', 'https://api.openai.com/v1')
+        api_key = os.getenv('LLM_API_KEY', 'ollama')
+        
         provider = OpenAIProvider(base_url=base_url, api_key=api_key)
         return OpenAIModel(llm_choice, provider=provider)
 
@@ -60,7 +52,7 @@ def get_embedding_client() -> openai.AsyncOpenAI:
     Get embedding client configuration based on environment variables.
     
     Returns:
-        Configured OpenAI client for embeddings
+        Configured OpenAI-compatible client for embeddings
     """
     base_url = os.getenv('EMBEDDING_BASE_URL', 'https://api.openai.com/v1')
     api_key = os.getenv('EMBEDDING_API_KEY', 'ollama')
@@ -81,7 +73,7 @@ def get_embedding_model() -> str:
     return os.getenv('EMBEDDING_MODEL', 'text-embedding-3-small')
 
 
-def get_ingestion_model() -> OpenAIModel:
+def get_ingestion_model() -> Union[OpenAIModel, GeminiModel]:
     """
     Get ingestion-specific LLM model (can be faster/cheaper than main model).
     
@@ -141,23 +133,12 @@ def get_model_info() -> dict:
     Returns:
         Dictionary with model configuration info
     """
-    # Try to get additional info from new embedding provider system
-    embedding_info = {}
-    try:
-        from .embeddings import get_provider_info
-        embedding_info = get_provider_info()
-    except:
-        pass
-    
     return {
         "llm_provider": get_llm_provider(),
         "llm_model": os.getenv('LLM_CHOICE'),
-        "llm_base_url": os.getenv('LLM_BASE_URL'),
+        "llm_base_url": os.getenv('LLM_BASE_URL') if get_llm_provider() != 'google' else 'N/A (using Google API)',
         "embedding_provider": get_embedding_provider(),
         "embedding_model": get_embedding_model(),
         "embedding_base_url": os.getenv('EMBEDDING_BASE_URL'),
-        "embedding_dimensions": embedding_info.get('dimensions'),
-        "embedding_max_tokens": embedding_info.get('max_tokens'),
-        "embedding_supports_images": embedding_info.get('supports_images'),
         "ingestion_model": os.getenv('INGESTION_LLM_CHOICE', 'same as main'),
     }

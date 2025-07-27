@@ -31,7 +31,7 @@ class Colors:
 class AgenticRAGCLI:
     """CLI for interacting with the Agentic RAG API."""
     
-    def __init__(self, base_url: str = "http://localhost:8058"):
+    def __init__(self, base_url: str = "http://localhost:8000"):
         """Initialize CLI with base URL."""
         self.base_url = base_url.rstrip('/')
         self.session_id = None
@@ -252,8 +252,8 @@ def main():
     
     parser.add_argument(
         '--url',
-        default='http://localhost:8058',
-        help='Base URL for the API (default: http://localhost:8058)'
+        default='http://localhost:8000',
+        help='Base URL for the API (default: http://localhost:8000)'
     )
     
     parser.add_argument(
