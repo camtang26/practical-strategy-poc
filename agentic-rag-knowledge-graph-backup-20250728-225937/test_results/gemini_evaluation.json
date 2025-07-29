@@ -1,0 +1,47 @@
+[
+  {
+    "query_id": "simple_factual",
+    "query": "What is the definition of strategic thinking?",
+    "expected_tool": "vector_search",
+    "actual_tools": [],
+    "response_time": 0.07633185386657715,
+    "response_preview": "No response",
+    "tool_match": false
+  },
+  {
+    "query_id": "relationship",
+    "query": "How does strategic planning relate to organizational culture and leadership?",
+    "expected_tool": "graph_search",
+    "actual_tools": [],
+    "response_time": 0.007075071334838867,
+    "response_preview": "No response",
+    "tool_match": false
+  },
+  {
+    "query_id": "complex_conceptual",
+    "query": "Explain the process of developing a comprehensive strategic plan for a mid-size company facing digital transformation",
+    "expected_tool": "hybrid_search",
+    "actual_tools": [],
+    "response_time": 0.007509469985961914,
+    "response_preview": "No response",
+    "tool_match": false
+  },
+  {
+    "query_id": "implementation",
+    "query": "What are the specific steps and tools needed to implement strategic planning in a startup?",
+    "expected_tool": "multiple_tools",
+    "actual_tools": [],
+    "response_time": 0.006583452224731445,
+    "response_preview": "No response",
+    "tool_match": false
+  },
+  {
+    "query_id": "comparison",
+    "query": "Compare strategic planning approaches for established corporations versus agile startups",
+    "expected_tool": "hybrid_search",
+    "actual_tools": [],
+    "response_time": 0.006159067153930664,
+    "response_preview": "No response",
+    "tool_match": false
+  }
+]

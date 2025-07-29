@@ -5,6 +5,7 @@ Flexible provider configuration for LLM and embedding models.
 import os
 from typing import Optional, Union
 from pydantic_ai.providers.openai import OpenAIProvider
+import httpx
 from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.models.gemini import GeminiModel
 import openai
@@ -46,7 +47,17 @@ def get_llm_model(model_choice: Optional[str] = None) -> Union[OpenAIModel, Gemi
     elif provider_type == 'qwen':
         # Configure Qwen (uses OpenAI-compatible API)
         base_url = os.getenv('LLM_BASE_URL', 'https://api.qwen.ai/v1')
-        provider = OpenAIProvider(base_url=base_url, api_key=api_key)
+        
+        # Create custom httpx client that adds enable_thinking to all requests
+        class QwenHTTPClient(httpx.AsyncClient):
+            async def request(self, *args, **kwargs):
+                # If this is a POST request with JSON data, add enable_thinking
+                if args[0].upper() == 'POST' and 'json' in kwargs:
+                    kwargs['json']['enable_thinking'] = True
+                return await super().request(*args, **kwargs)
+        
+        http_client = QwenHTTPClient(timeout=120.0)
+        provider = OpenAIProvider(base_url=base_url, api_key=api_key, http_client=http_client)
         return OpenAIModel(llm_choice, provider=provider)
     else:
         # Default to OpenAI-compatible

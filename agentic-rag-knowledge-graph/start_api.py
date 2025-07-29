@@ -1,16 +1,12 @@
 #!/usr/bin/env python3
-"""Start the API with Jina patches."""
+"""Start the API server."""
 import sys
 import os
 
 # Add the project root to Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-# Import and apply the Jina patch
-from agent.providers_jina_patch import patch_providers
-patch_providers()
-
-# Now start the API
+# Start the API
 import uvicorn
 from agent.api import app
 

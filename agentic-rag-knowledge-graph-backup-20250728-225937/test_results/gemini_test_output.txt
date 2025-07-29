@@ -1,0 +1,72 @@
+
+Testing: simple_factual
+Query: What is the definition of strategic thinking?
+  Response time: 0.1s
+  Tool match: False
+
+Testing: relationship
+Query: How does strategic planning relate to organizational culture and leadership?
+  Response time: 0.0s
+  Tool match: False
+
+Testing: complex_conceptual
+Query: Explain the process of developing a comprehensive strategic plan for a mid-size company facing digital transformation
+  Response time: 0.0s
+  Tool match: False
+
+Testing: implementation
+Query: What are the specific steps and tools needed to implement strategic planning in a startup?
+  Response time: 0.0s
+  Tool match: False
+
+Testing: comparison
+Query: Compare strategic planning approaches for established corporations versus agile startups
+  Response time: 0.0s
+  Tool match: False
+
+
+=== GEMINI 2.5 PRO EVALUATION SUMMARY ===
+
+Tool Selection Accuracy:
+  0/5 queries used expected tools (0%)
+
+Response Times:
+  Average: 0.0s
+  Range: 0.0s - 0.1s
+
+Detailed Results:
+
+simple_factual:
+  Expected: vector_search
+  Actual: []
+  Match: ✗
+  Time: 0.1s
+  Response preview: No response...
+
+relationship:
+  Expected: graph_search
+  Actual: []
+  Match: ✗
+  Time: 0.0s
+  Response preview: No response...
+
+complex_conceptual:
+  Expected: hybrid_search
+  Actual: []
+  Match: ✗
+  Time: 0.0s
+  Response preview: No response...
+
+implementation:
+  Expected: multiple_tools
+  Actual: []
+  Match: ✗
+  Time: 0.0s
+  Response preview: No response...
+
+comparison:
+  Expected: hybrid_search
+  Actual: []
+  Match: ✗
+  Time: 0.0s
+  Response preview: No response...

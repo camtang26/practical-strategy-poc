@@ -1,0 +1,537 @@
+"""
+Graph utilities for Neo4j/Graphiti integration.
+"""
+
+import os
+import json
+import logging
+from typing import List, Dict, Any, Optional, Tuple
+from datetime import datetime, timezone
+from contextlib import asynccontextmanager
+import asyncio
+
+from graphiti_core import Graphiti
+from graphiti_core.utils.maintenance.graph_data_operations import clear_data
+from graphiti_core.llm_client.config import LLMConfig
+
+# Import all available LLM clients
+from graphiti_core.llm_client.openai_client import OpenAIClient
+from graphiti_core.llm_client.gemini_client import GeminiClient
+
+# Import all available embedders
+from graphiti_core.embedder.openai import OpenAIEmbedder, OpenAIEmbedderConfig
+from graphiti_core.embedder.gemini import GeminiEmbedder, GeminiEmbedderConfig
+
+# Import available cross-encoders
+from graphiti_core.cross_encoder.openai_reranker_client import OpenAIRerankerClient
+
+# Import custom embedders
+from .jina_embedder import JinaEmbedder, JinaEmbedderConfig
+
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+logger = logging.getLogger(__name__)
+
+# Help from this PR for setting up the custom clients: https://github.com/getzep/graphiti/pull/601/files
+class GraphitiClient:
+    """Manages Graphiti knowledge graph operations."""
+    
+    def __init__(
+        self,
+        neo4j_uri: Optional[str] = None,
+        neo4j_user: Optional[str] = None,
+        neo4j_password: Optional[str] = None
+    ):
+        """
+        Initialize Graphiti client.
+        
+        Args:
+            neo4j_uri: Neo4j connection URI
+            neo4j_user: Neo4j username
+            neo4j_password: Neo4j password
+        """
+        # Neo4j configuration
+        self.neo4j_uri = neo4j_uri or os.getenv("NEO4J_URI", "bolt://localhost:7687")
+        self.neo4j_user = neo4j_user or os.getenv("NEO4J_USER", "neo4j")
+        self.neo4j_password = neo4j_password or os.getenv("NEO4J_PASSWORD", "password")
+        
+        # LLM configuration
+        self.llm_provider = os.getenv("LLM_PROVIDER", "openai")
+        self.llm_base_url = os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")
+        self.llm_api_key = os.getenv("LLM_API_KEY")
+        self.llm_choice = os.getenv("LLM_CHOICE", "gpt-4o-mini")
+        
+        # Embedding configuration
+        self.embedding_provider = os.getenv("EMBEDDING_PROVIDER", "openai")
+        self.embedding_base_url = os.getenv("EMBEDDING_BASE_URL", "https://api.openai.com/v1")
+        self.embedding_api_key = os.getenv("EMBEDDING_API_KEY", self.llm_api_key)
+        self.embedding_model = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
+        
+        # Set embedding dimensions based on provider
+        if self.embedding_provider == "jina":
+            self.embedding_dimensions = 2048
+        elif self.embedding_provider == "gemini":
+            self.embedding_dimensions = int(os.getenv("GRAPHITI_EMBEDDING_DIM", "768"))
+        else:
+            self.embedding_dimensions = 1536
+        
+        self.graphiti: Optional[Graphiti] = None
+        self._initialized = False
+        
+    async def initialize(self):
+        """Initialize Graphiti client."""
+        if self._initialized:
+            return
+        
+        try:
+            # Create LLM client based on provider
+            llm_config = LLMConfig(
+                api_key=self.llm_api_key,
+                model=self.llm_choice,
+                small_model=self.llm_choice,  # Can be the same as main model
+                base_url=self.llm_base_url if self.llm_provider == "openai" else None
+            )
+            
+            # Select LLM client based on provider
+            if self.llm_provider in ["gemini", "google"]:
+                llm_client = GeminiClient(config=llm_config)
+            else:
+                # Default to OpenAI
+                llm_client = OpenAIClient(config=llm_config)
+            
+            # Create embedder based on provider
+            if self.embedding_provider == 'jina':
+                embedder = JinaEmbedder(
+                    config=JinaEmbedderConfig(
+                        api_key=self.embedding_api_key,
+                        model=self.embedding_model,
+                        embedding_dim=self.embedding_dimensions
+                    )
+                )
+            elif self.embedding_provider == 'gemini':
+                embedder = GeminiEmbedder(
+                    config=GeminiEmbedderConfig(
+                        api_key=self.embedding_api_key,
+                        embedding_model=self.embedding_model,
+                        embedding_dim=self.embedding_dimensions
+                    )
+                )
+            else:
+                # Default to OpenAI
+                embedder = OpenAIEmbedder(
+                    config=OpenAIEmbedderConfig(
+                        api_key=self.embedding_api_key,
+                        embedding_model=self.embedding_model,
+                        embedding_dim=self.embedding_dimensions,
+                        base_url=self.embedding_base_url
+                    )
+                )
+            
+            # For now, we'll use OpenAI reranker for all providers
+            # Graphiti doesn't have a Gemini reranker yet
+            cross_encoder = OpenAIRerankerClient(
+                config=LLMConfig(
+                    api_key=os.getenv("OPENAI_API_KEY", self.llm_api_key),
+                    model="gpt-4o-mini"
+                )
+            )
+            
+            # Initialize Graphiti
+            self.graphiti = Graphiti(
+                uri=self.neo4j_uri,
+                user=self.neo4j_user,
+                password=self.neo4j_password,
+                llm_client=llm_client,
+                embedder=embedder,
+                cross_encoder=cross_encoder
+            )
+            
+            # Build indices and constraints
+            await self.graphiti.build_indices_and_constraints()
+            
+            self._initialized = True
+            logger.info(f"Graphiti client initialized successfully with LLM: {self.llm_choice} ({self.llm_provider}) and embedder: {self.embedding_model} ({self.embedding_provider})")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize Graphiti client: {e}")
+            raise
+    
+    async def close(self):
+        """Close Graphiti connection."""
+        if self.graphiti:
+            await self.graphiti.close()
+            self.graphiti = None
+            self._initialized = False
+            logger.info("Graphiti client closed")
+    
+    async def add_episode(
+        self,
+        episode_id: str,
+        content: str,
+        source: str,
+        timestamp: Optional[datetime] = None,
+        metadata: Optional[Dict[str, Any]] = None
+    ):
+        """
+        Add an episode to the knowledge graph.
+        
+        Args:
+            episode_id: Unique episode identifier
+            content: Episode content
+            source: Source of the content
+            timestamp: Episode timestamp
+            metadata: Additional metadata
+        """
+        if not self._initialized:
+            await self.initialize()
+        
+        episode_timestamp = timestamp or datetime.now(timezone.utc)
+        
+        # Import EpisodeType for proper source handling
+        from graphiti_core.nodes import EpisodeType
+        
+        await self.graphiti.add_episode(
+            name=episode_id,
+            episode_body=content,
+            source=EpisodeType.text,  # Always use text type for our content
+            source_description=source,
+            reference_time=episode_timestamp,
+        )
+        
+        logger.info(f"Added episode {episode_id} to knowledge graph")
+    
+    async def search(
+        self,
+        query: str,
+        limit: int = 10,
+        search_type: str = "semantic"
+    ) -> Dict[str, Any]:
+        """
+        Search the knowledge graph.
+        
+        Args:
+            query: Search query
+            limit: Maximum results
+            search_type: Type of search (semantic, keyword, hybrid)
+            
+        Returns:
+            Search results with entities and relationships
+        """
+        if not self._initialized:
+            await self.initialize()
+        
+        try:
+            results = await self.graphiti.search(query)
+            
+            # Process results to extract relevant information
+            processed_results = {
+                "entities": [],
+                "relationships": [],
+                "metadata": {
+                    "query": query,
+                    "limit": limit,
+                    "search_type": search_type
+                }
+            }
+            
+            # Extract entities and relationships from search results
+            if hasattr(results, 'entities'):
+                processed_results["entities"] = [
+                    {
+                        "id": entity.id,
+                        "name": entity.name,
+                        "type": entity.type,
+                        "summary": getattr(entity, 'summary', ''),
+                        "metadata": getattr(entity, 'metadata', {})
+                    }
+                    for entity in results.entities[:limit]
+                ]
+            
+            if hasattr(results, 'relationships'):
+                processed_results["relationships"] = [
+                    {
+                        "id": rel.id,
+                        "type": rel.type,
+                        "source": rel.source,
+                        "target": rel.target,
+                        "summary": getattr(rel, 'summary', ''),
+                        "metadata": getattr(rel, 'metadata', {})
+                    }
+                    for rel in results.relationships[:limit]
+                ]
+            
+            return processed_results
+            
+        except Exception as e:
+            logger.error(f"Error searching knowledge graph: {e}")
+            return {
+                "entities": [],
+                "relationships": [],
+                "error": str(e),
+                "metadata": {
+                    "query": query,
+                    "limit": limit,
+                    "search_type": search_type
+                }
+            }
+    
+    async def get_entity_relationships(
+        self,
+        entity_name: str,
+        relationship_type: Optional[str] = None,
+        limit: int = 10
+    ) -> Dict[str, Any]:
+        """
+        Get relationships for a specific entity.
+        
+        Args:
+            entity_name: Name of the entity
+            relationship_type: Optional filter by relationship type
+            limit: Maximum relationships to return
+            
+        Returns:
+            Entity relationships
+        """
+        if not self._initialized:
+            await self.initialize()
+        
+        results = await self.graphiti.search(f"relationships involving {entity_name}")
+        
+        # Process and filter results
+        relationships = []
+        if hasattr(results, 'relationships'):
+            for rel in results.relationships:
+                if relationship_type and rel.type != relationship_type:
+                    continue
+                relationships.append({
+                    "id": rel.id,
+                    "type": rel.type,
+                    "source": rel.source,
+                    "target": rel.target,
+                    "summary": getattr(rel, 'summary', ''),
+                    "metadata": getattr(rel, 'metadata', {})
+                })
+                if len(relationships) >= limit:
+                    break
+        
+        return {
+            "entity": entity_name,
+            "relationships": relationships,
+            "search_method": "graphiti_semantic_search"
+        }
+    
+    async def get_entity_timeline(
+        self,
+        entity_name: str,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        limit: int = 20
+    ) -> Dict[str, Any]:
+        """
+        Get timeline of events for an entity.
+        
+        Args:
+            entity_name: Name of the entity
+            start_date: Optional start date filter
+            end_date: Optional end date filter
+            limit: Maximum events to return
+            
+        Returns:
+            Timeline of entity events
+        """
+        if not self._initialized:
+            await self.initialize()
+        
+        results = await self.graphiti.search(f"timeline history of {entity_name}")
+        
+        # Process timeline results
+        events = []
+        if hasattr(results, 'entities'):
+            for entity in results.entities:
+                # Filter by date if provided
+                entity_date = getattr(entity, 'created_at', None)
+                if entity_date:
+                    if start_date and entity_date < start_date:
+                        continue
+                    if end_date and entity_date > end_date:
+                        continue
+                
+                events.append({
+                    "id": entity.id,
+                    "name": entity.name,
+                    "type": entity.type,
+                    "date": entity_date.isoformat() if entity_date else None,
+                    "summary": getattr(entity, 'summary', ''),
+                    "metadata": getattr(entity, 'metadata', {})
+                })
+                
+                if len(events) >= limit:
+                    break
+        
+        # Sort by date
+        events.sort(key=lambda x: x['date'] or '', reverse=True)
+        
+        return {
+            "entity": entity_name,
+            "events": events,
+            "date_range": {
+                "start": start_date.isoformat() if start_date else None,
+                "end": end_date.isoformat() if end_date else None
+            }
+        }
+    
+    async def health_check(self) -> Dict[str, Any]:
+        """
+        Check Graphiti health status.
+        
+        Returns:
+            Health status information
+        """
+        try:
+            if not self._initialized:
+                await self.initialize()
+            
+            # Try a simple search to verify connectivity
+            test_results = await self.graphiti.search("test")
+            
+            return {
+                "status": "healthy",
+                "graphiti_initialized": True,
+                "neo4j_connected": True,
+                "llm_provider": self.llm_provider,
+                "embedding_provider": self.embedding_provider,
+                "embedding_dimensions": self.embedding_dimensions
+            }
+        except Exception as e:
+            return {
+                "status": "unhealthy",
+                "graphiti_initialized": False,
+                "error": str(e),
+                "llm_provider": self.llm_provider,
+                "embedding_provider": self.embedding_provider
+            }
+    
+    async def clear_graph(self) -> Dict[str, Any]:
+        """
+        Clear all data from the knowledge graph.
+        
+        Returns:
+            Status of the operation
+        """
+        try:
+            if not self._initialized:
+                await self.initialize()
+            
+            await clear_data(self.graphiti.driver)
+            logger.warning("Cleared all data from knowledge graph")
+            
+            return {"status": "success", "message": "Graph data cleared"}
+            
+        except Exception as e:
+            logger.error(f"Failed to clear graph data: {e}")
+            
+            # Fallback: Close and reinitialize (this will create fresh indices)
+            if self.graphiti:
+                await self.graphiti.close()
+            
+            # Create clients again with provider switching
+            llm_config = LLMConfig(
+                api_key=self.llm_api_key,
+                model=self.llm_choice,
+                small_model=self.llm_choice,
+                base_url=self.llm_base_url if self.llm_provider == "openai" else None
+            )
+            
+            # Select LLM client based on provider
+            if self.llm_provider in ["gemini", "google"]:
+                llm_client = GeminiClient(config=llm_config)
+            else:
+                llm_client = OpenAIClient(config=llm_config)
+            
+            # Create embedder based on provider
+            if self.embedding_provider == 'jina':
+                embedder = JinaEmbedder(
+                    config=JinaEmbedderConfig(
+                        api_key=self.embedding_api_key,
+                        model=self.embedding_model,
+                        embedding_dim=self.embedding_dimensions
+                    )
+                )
+            elif self.embedding_provider == 'gemini':
+                embedder = GeminiEmbedder(
+                    config=GeminiEmbedderConfig(
+                        api_key=self.embedding_api_key,
+                        embedding_model=self.embedding_model,
+                        embedding_dim=self.embedding_dimensions
+                    )
+                )
+            else:
+                embedder = OpenAIEmbedder(
+                    config=OpenAIEmbedderConfig(
+                        api_key=self.embedding_api_key,
+                        embedding_model=self.embedding_model,
+                        embedding_dim=self.embedding_dimensions,
+                        base_url=self.embedding_base_url
+                    )
+                )
+            
+            # Recreate cross-encoder
+            cross_encoder = OpenAIRerankerClient(
+                config=LLMConfig(
+                    api_key=os.getenv("OPENAI_API_KEY", self.llm_api_key),
+                    model="gpt-4o-mini"
+                )
+            )
+            
+            self.graphiti = Graphiti(
+                uri=self.neo4j_uri,
+                user=self.neo4j_user,
+                password=self.neo4j_password,
+                llm_client=llm_client,
+                embedder=embedder,
+                cross_encoder=cross_encoder
+            )
+            
+            await self.graphiti.build_indices_and_constraints()
+            self._initialized = True
+            
+            # Try clearing again
+            await clear_data(self.graphiti.driver)
+            
+            return {"status": "success", "message": "Graph reinitialized and data cleared"}
+
+
+# Example usage
+async def main():
+    # Initialize client
+    graph_client = GraphitiClient()
+    
+    try:
+        # Initialize connection
+        await graph_client.initialize()
+        
+        # Add an episode
+        await graph_client.add_episode(
+            episode_id="test_001",
+            content="This is a test episode about artificial intelligence and machine learning.",
+            source="test_script",
+            metadata={"category": "technology"}
+        )
+        
+        # Search the graph
+        results = await graph_client.search("artificial intelligence")
+        print(f"Search results: {json.dumps(results, indent=2)}")
+        
+        # Get health status
+        health = await graph_client.health_check()
+        print(f"Health status: {json.dumps(health, indent=2)}")
+        
+    finally:
+        # Close connection
+        await graph_client.close()
+
+if __name__ == "__main__":
+    asyncio.run(main())

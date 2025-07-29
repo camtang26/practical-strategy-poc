@@ -1,0 +1,82 @@
+[
+  {
+    "query_id": "simple_definition",
+    "query": "What is strategic planning?",
+    "expected_tools": [
+      "vector_search"
+    ],
+    "actual_tools": [],
+    "time_to_first_token": null,
+    "total_time": 0.013920783996582031,
+    "tool_order": "tools_after",
+    "response_length": 0,
+    "response_preview": "",
+    "error": null,
+    "tool_match_score": 0.0
+  },
+  {
+    "query_id": "concept_explanation",
+    "query": "Explain the concept of strategic thinking and how it differs from operational thinking",
+    "expected_tools": [
+      "vector_search",
+      "hybrid_search"
+    ],
+    "actual_tools": [],
+    "time_to_first_token": null,
+    "total_time": 0.009124279022216797,
+    "tool_order": "tools_after",
+    "response_length": 0,
+    "response_preview": "",
+    "error": null,
+    "tool_match_score": 0.0
+  },
+  {
+    "query_id": "relationship_query",
+    "query": "How does strategic planning relate to organizational culture and leadership?",
+    "expected_tools": [
+      "graph_search",
+      "hybrid_search"
+    ],
+    "actual_tools": [],
+    "time_to_first_token": null,
+    "total_time": 0.006547689437866211,
+    "tool_order": "tools_after",
+    "response_length": 0,
+    "response_preview": "",
+    "error": null,
+    "tool_match_score": 0.0
+  },
+  {
+    "query_id": "implementation_steps",
+    "query": "What are the specific steps to implement strategic planning in a startup?",
+    "expected_tools": [
+      "vector_search",
+      "hybrid_search"
+    ],
+    "actual_tools": [],
+    "time_to_first_token": null,
+    "total_time": 0.0068836212158203125,
+    "tool_order": "tools_after",
+    "response_length": 0,
+    "response_preview": "",
+    "error": null,
+    "tool_match_score": 0.0
+  },
+  {
+    "query_id": "complex_scenario",
+    "query": "Develop a strategic plan for a mid-size retail company transitioning to e-commerce during market disruption",
+    "expected_tools": [
+      "hybrid_search",
+      "vector_search",
+      "graph_search"
+    ],
+    "actual_tools": [],
+    "time_to_first_token": null,
+    "total_time": 0.006421566009521484,
+    "tool_order": "tools_after",
+    "response_length": 0,
+    "response_preview": "",
+    "error": null,
+    "tool_match_score": 0.0
+  }
+]

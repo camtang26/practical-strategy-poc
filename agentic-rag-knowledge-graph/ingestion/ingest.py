@@ -13,7 +13,7 @@ import argparse
 import asyncpg
 from dotenv import load_dotenv
 from .chunker import ChunkingConfig, create_chunker, DocumentChunk
-from ..embedder_jina_optimized import create_optimized_embedder as create_embedder
+from .embedder_jina_v2_prod import create_optimized_embedder as create_embedder
 from .graph_builder import create_graph_builder
 try:
     from ..agent.db_utils import initialize_database, close_database, db_pool

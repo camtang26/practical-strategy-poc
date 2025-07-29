@@ -1,0 +1,39 @@
+--- agent/db_utils.py.old
++++ agent/db_utils.py
+@@ -15,6 +15,7 @@ from asyncpg.pool import Pool
+ from dotenv import load_dotenv
+ 
+ # Load environment variables
+ load_dotenv()
++from .providers import get_embedding_provider
+ 
+ logger = logging.getLogger(__name__)
+ 
+@@ -385,11 +386,12 @@ async def vector_search(
+         # PostgreSQL vector format: '[1.0,2.0,3.0]' (no spaces after commas)
+         embedding_str = '[' + ','.join(map(str, embedding)) + ']'
+         
++        provider = get_embedding_provider()
+         results = await conn.fetch(
+-            "SELECT * FROM match_chunks($1::vector, $2)",
++            "SELECT * FROM match_chunks_unified($1::vector, $2, $3)",
+             embedding_str,
++            provider,
+             limit
+         )
+         
+         return [
+@@ -428,11 +430,13 @@ async def hybrid_search(
+         # PostgreSQL vector format: '[1.0,2.0,3.0]' (no spaces after commas)
+         embedding_str = '[' + ','.join(map(str, embedding)) + ']'
+         
++        provider = get_embedding_provider()
+         results = await conn.fetch(
+-            "SELECT * FROM hybrid_search($1::vector, $2, $3, $4)",
++            "SELECT * FROM hybrid_search_unified($1::vector, $2, $3, $4, $5)",
+             embedding_str,
+             query_text,
++            provider,
+             limit,
+             text_weight
+         )
