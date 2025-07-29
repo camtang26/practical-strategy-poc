@@ -2,7 +2,7 @@
 
 // In production, use the full backend URL. In dev, use the proxy.
 const API_BASE = import.meta.env.PROD 
-  ? import.meta.env.VITE_API_URL || 'http://170.64.129.131:8058'
+  ? import.meta.env.VITE_API_URL || 'https://practicalstrat.duckdns.org'
   : '/api';
 
 export interface ChatMessage {
