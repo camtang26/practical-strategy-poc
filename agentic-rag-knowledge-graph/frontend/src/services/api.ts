@@ -10,6 +10,7 @@ export interface ChatMessage {
   content: string;
   timestamp?: string;
   tools?: ToolCall[];
+  model_used?: string;
 }
 
 export interface ToolCall {
@@ -21,6 +22,7 @@ export interface ToolCall {
 export interface ChatRequest {
   message: string;
   session_id?: string;
+  model_choice?: string;
 }
 
 export interface SearchRequest {
@@ -81,7 +83,8 @@ class ApiClient {
     request: ChatRequest,
     onChunk: (chunk: string) => void,
     onTools?: (tools: ToolCall[]) => void,
-    onError?: (error: Error) => void
+    onError?: (error: Error) => void,
+    onModel?: (model: string) => void
   ): Promise<void> {
     try {
       const response = await fetch(`${API_BASE}/chat/stream`, {
@@ -129,6 +132,8 @@ class ApiClient {
                 onChunk(parsed.content);
               } else if (parsed.type === 'tools' && parsed.tools) {
                 onTools?.(parsed.tools);
+              } else if (parsed.type === 'model' && parsed.model_used) {
+                onModel?.(parsed.model_used);
               }
             } catch (e) {
               console.warn('Failed to parse SSE chunk:', e);

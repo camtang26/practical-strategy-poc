@@ -7,9 +7,10 @@ import asyncio
 import json
 import logging
 from contextlib import asynccontextmanager
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
 import uuid
+from functools import lru_cache
 
 from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.responses import StreamingResponse
@@ -17,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 import uvicorn
 from dotenv import load_dotenv
+from pydantic_ai import Agent
 
 from .agent import rag_agent, AgentDependencies
 from .db_utils import (
@@ -135,6 +137,52 @@ app.add_middleware(
 )
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+
+# Multi-model support
+@lru_cache(maxsize=10)
+def get_agent_for_model(model_choice: Optional[str] = None) -> Tuple[Agent, str]:
+    """Get or create an agent for a specific model."""
+    if model_choice:
+        # Map frontend names to actual model names
+        model_map = {
+            "qwen3-thinking": "qwen3-235b-a22b-thinking-2507",
+            "gemini-2.5-pro": "gemini-2.5-pro",
+            "gemini-2.5-flash-thinking": "gemini-2.5-flash-thinking",
+        }
+        actual_model = model_map.get(model_choice, model_choice)
+        
+        # Save current env
+        old_provider = os.environ.get('LLM_PROVIDER', '')
+        old_choice = os.environ.get('LLM_CHOICE', '')
+        
+        # Configure for specific model
+        if actual_model.startswith("qwen"):
+            os.environ['LLM_PROVIDER'] = 'qwen'
+            os.environ['LLM_CHOICE'] = actual_model
+            os.environ['ENABLE_THINKING'] = 'true'
+        elif actual_model.startswith("gemini"):
+            os.environ['LLM_PROVIDER'] = 'google'
+            os.environ['LLM_CHOICE'] = actual_model
+        
+        # Import fresh to get new agent with new model
+        from importlib import reload
+        import agent.providers_extended as providers_mod
+        import agent.agent as agent_mod
+        reload(providers_mod)
+        reload(agent_mod)
+        
+        # Get the new agent
+        new_agent = agent_mod.rag_agent
+        
+        # Restore env for next call
+        os.environ['LLM_PROVIDER'] = old_provider
+        os.environ['LLM_CHOICE'] = old_choice
+        
+        return new_agent, actual_model
+    
+    # Default agent
+    return rag_agent, os.environ.get('LLM_CHOICE', 'qwen3-235b-a22b-thinking-2507')
 
 
 # Helper functions for agent execution
@@ -289,8 +337,9 @@ async def execute_agent(
     session_id: str,
     user_id: Optional[str] = None,
     save_conversation: bool = True,
-    search_type: Optional[str] = None
-) -> tuple[str, List[ToolCall]]:
+    search_type: Optional[str] = None,
+    model_choice: Optional[str] = None
+) -> tuple[str, List[ToolCall], str]:
     """
     Execute the agent with a message.
     
@@ -299,11 +348,16 @@ async def execute_agent(
         session_id: Session ID
         user_id: Optional user ID
         save_conversation: Whether to save the conversation
+        search_type: Type of search to perform
+        model_choice: Model to use (e.g., 'qwen3-thinking', 'gemini-2.5-pro')
     
     Returns:
-        Tuple of (agent response, tools used)
+        Tuple of (agent response, tools used, model used)
     """
     try:
+        # Get the appropriate agent for the model
+        agent, model_used = get_agent_for_model(model_choice)
+        
         # Create dependencies
         deps = AgentDependencies(
             search_type=search_type,
@@ -324,7 +378,7 @@ async def execute_agent(
             full_prompt = f"Previous conversation:\n{context_str}\n\nCurrent question: {message}"
         
         # Run the agent
-        result = await rag_agent.run(full_prompt, deps=deps)
+        result = await agent.run(full_prompt, deps=deps)
         
         response = result.data
         tools_used = extract_tool_calls(result)
@@ -337,25 +391,29 @@ async def execute_agent(
                 assistant_message=response,
                 metadata={
                     "user_id": user_id,
-                    "tool_calls": len(tools_used)
+                    "tool_calls": len(tools_used),
+                    "model_used": model_used
                 }
             )
         
-        return response, tools_used
+        return response, tools_used, model_used
         
     except Exception as e:
         logger.error(f"Agent execution failed: {e}")
         error_response = f"I encountered an error while processing your request: {str(e)}"
+        
+        # Get model info even in error case
+        _, model_used = get_agent_for_model(model_choice)
         
         if save_conversation:
             await save_conversation_turn(
                 session_id=session_id,
                 user_message=message,
                 assistant_message=error_response,
-                metadata={"error": str(e)}
+                metadata={"error": str(e), "model_used": model_used}
             )
         
-        return error_response, []
+        return error_response, [], model_used
 
 
 # API Endpoints
@@ -397,17 +455,19 @@ async def chat(request: ChatRequest):
         session_id = await get_or_create_session(request)
         
         # Execute agent
-        response, tools_used = await execute_agent(
+        response, tools_used, model_used = await execute_agent(
             message=request.message,
             session_id=session_id,
             user_id=request.user_id,
-            search_type=getattr(request, 'search_type', None)
+            search_type=getattr(request, 'search_type', None),
+            model_choice=getattr(request, 'model_choice', None)
         )
         
         return ChatResponse(
             message=response,
             session_id=session_id,
             tools_used=tools_used,
+            model_used=model_used,
             metadata={"search_type": str(request.search_type)}
         )
         
@@ -432,9 +492,15 @@ async def chat_stream(request: ChatRequest):
             try:
                 yield f"data: {json.dumps({'type': 'session', 'session_id': session_id})}\n\n"
                 
+                # Get the appropriate agent for the model
+                agent, model_used = get_agent_for_model(getattr(request, 'model_choice', None))
+                
+                # Send model info early
+                yield f"data: {json.dumps({'type': 'model', 'model_used': model_used})}\n\n"
+                
                 # Create dependencies
                 deps = AgentDependencies(
-            search_type=getattr(request, "search_type", None),
+                    search_type=getattr(request, "search_type", None),
                     session_id=session_id,
                     user_id=request.user_id
                 )
@@ -462,9 +528,9 @@ async def chat_stream(request: ChatRequest):
                 full_response = ""
                 
                 # Stream using agent.iter() pattern
-                async with rag_agent.iter(full_prompt, deps=deps) as run:
+                async with agent.iter(full_prompt, deps=deps) as run:
                     async for node in run:
-                        if rag_agent.is_model_request_node(node):
+                        if agent.is_model_request_node(node):
                             # Stream tokens from the model
                             async with node.stream(run.ctx) as request_stream:
                                 async for event in request_stream:
@@ -503,7 +569,8 @@ async def chat_stream(request: ChatRequest):
                     content=full_response,
                     metadata={
                         "streamed": True,
-                        "tool_calls": len(tools_used)
+                        "tool_calls": len(tools_used),
+                        "model_used": model_used
                     }
                 )
                 

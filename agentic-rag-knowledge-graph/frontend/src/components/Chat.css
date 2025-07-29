@@ -446,3 +446,57 @@
 .message-content pre > div::-webkit-scrollbar-thumb:hover {
   background: #5a5d60;
 }
+
+/* Model Selector Styles */
+.model-selector {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-right: 1rem;
+}
+
+.model-selector label {
+  font-size: 0.9rem;
+  color: #666;
+  font-weight: 500;
+}
+
+.model-select {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+  border: 2px solid #ddd;
+  border-radius: 4px;
+  background-color: white;
+  cursor: pointer;
+  transition: border-color 0.3s;
+  min-width: 150px;
+}
+
+.model-select:hover:not(:disabled) {
+  border-color: #2196f3;
+}
+
+.model-select:focus {
+  outline: none;
+  border-color: #2196f3;
+  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
+}
+
+.model-select:disabled {
+  background-color: #f5f5f5;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Model Attribution Styles */
+.model-attribution {
+  margin-top: 0.5rem;
+  padding: 0.4rem 0.8rem;
+  background-color: rgba(33, 150, 243, 0.1);
+  color: #1565c0;
+  font-size: 0.85rem;
+  border-radius: 4px;
+  display: inline-block;
+  font-style: italic;
+  border: 1px solid rgba(33, 150, 243, 0.2);
+}
