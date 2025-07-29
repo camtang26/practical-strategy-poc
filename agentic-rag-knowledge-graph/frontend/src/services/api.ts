@@ -1,6 +1,9 @@
 // API Client for Practical Strategy Agent
 
-const API_BASE = '/api'; // Uses Vite proxy
+// In production, use the full backend URL. In dev, use the proxy.
+const API_BASE = import.meta.env.PROD 
+  ? import.meta.env.VITE_API_URL || 'http://170.64.129.131:8058'
+  : '/api';
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
