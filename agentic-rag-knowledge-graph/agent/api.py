@@ -140,46 +140,20 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
 # Multi-model support
-@lru_cache(maxsize=10)
 def get_agent_for_model(model_choice: Optional[str] = None) -> Tuple[Agent, str]:
     """Get or create an agent for a specific model."""
+    # Map frontend names to actual model names
+    model_map = {
+        "qwen3-thinking": "qwen3-235b-a22b-thinking-2507",
+        "gemini-2.5-pro": "gemini-2.5-pro",
+        "gemini-2.5-flash-thinking": "gemini-2.5-flash-thinking",
+    }
+    
+    # For now, return the default agent with model info
+    # TODO: Implement proper multi-agent support without module reloading
     if model_choice:
-        # Map frontend names to actual model names
-        model_map = {
-            "qwen3-thinking": "qwen3-235b-a22b-thinking-2507",
-            "gemini-2.5-pro": "gemini-2.5-pro",
-            "gemini-2.5-flash-thinking": "gemini-2.5-flash-thinking",
-        }
         actual_model = model_map.get(model_choice, model_choice)
-        
-        # Save current env
-        old_provider = os.environ.get('LLM_PROVIDER', '')
-        old_choice = os.environ.get('LLM_CHOICE', '')
-        
-        # Configure for specific model
-        if actual_model.startswith("qwen"):
-            os.environ['LLM_PROVIDER'] = 'qwen'
-            os.environ['LLM_CHOICE'] = actual_model
-            os.environ['ENABLE_THINKING'] = 'true'
-        elif actual_model.startswith("gemini"):
-            os.environ['LLM_PROVIDER'] = 'google'
-            os.environ['LLM_CHOICE'] = actual_model
-        
-        # Import fresh to get new agent with new model
-        from importlib import reload
-        import agent.providers_extended as providers_mod
-        import agent.agent as agent_mod
-        reload(providers_mod)
-        reload(agent_mod)
-        
-        # Get the new agent
-        new_agent = agent_mod.rag_agent
-        
-        # Restore env for next call
-        os.environ['LLM_PROVIDER'] = old_provider
-        os.environ['LLM_CHOICE'] = old_choice
-        
-        return new_agent, actual_model
+        return rag_agent, actual_model
     
     # Default agent
     return rag_agent, os.environ.get('LLM_CHOICE', 'qwen3-235b-a22b-thinking-2507')
